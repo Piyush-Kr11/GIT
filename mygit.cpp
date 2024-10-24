@@ -1,6 +1,7 @@
 #include <bits/stdc++.h>
 #include <openssl/sha.h>
-#include <zlib.h>
+#include <filesystem>
+#include <zstr.hpp>
 using namespace std;
 
 /*
@@ -103,68 +104,17 @@ int main(int argc, char *argv[])
         const std::string blob_sha = SHA_VAL.substr(2);
 
         std::string path = ".git/objects/" + dir_name + "/" + blob_sha;
-
-        std::ifstream input(path, std::ofstream::binary);
+        zstr::ifstream input(path, std::ofstream::binary);
         if (!input.is_open())
         {
             std::cerr << "Failed to open object file?\n";
             return EXIT_FAILURE;
         }
-        std::string compressed_data{std::istreambuf_iterator<char>(input),
-                                    std::istreambuf_iterator<char>()};
+        std::string object_str{std::istreambuf_iterator<char>(input),
+                               std::istreambuf_iterator<char>()};
         input.close();
-        const size_t buffer_size = 1024; // Size of the buffer for decompression
-        std::vector<char> decompressed_data(buffer_size);
-
-        z_stream strm;
-        strm.zalloc = Z_NULL;
-        strm.zfree = Z_NULL;
-        strm.opaque = Z_NULL;
-        strm.avail_in = static_cast<uInt>(compressed_data.size());
-        strm.next_in = reinterpret_cast<Bytef *>(const_cast<char *>(compressed_data.data()));
-
-        // Initialize the zlib stream
-        if (inflateInit(&strm) != Z_OK)
-        {
-            std::cerr << "inflateInit failed\n";
-            return EXIT_FAILURE;
-        }
-
-        std::ostringstream oss;
-        int ret;
-        do
-        {
-            strm.avail_out = static_cast<uInt>(buffer_size);
-            strm.next_out = reinterpret_cast<Bytef *>(decompressed_data.data());
-
-            ret = inflate(&strm, Z_NO_FLUSH);
-
-            if (oss.good())
-            {
-                oss.write(decompressed_data.data(), buffer_size - strm.avail_out);
-            }
-        } while (ret == Z_OK);
-
-        if (ret != Z_STREAM_END)
-        {
-            std::cerr << "inflate failed: " << ret << "\n";
-            inflateEnd(&strm);
-            return EXIT_FAILURE;
-        }
-
-        // Clean up
-        inflateEnd(&strm);
-
-        // Get the decompressed content and handle null terminator
-        std::string object_content = oss.str();
-        const auto null_pos = object_content.find('\0');
-        if (null_pos != std::string::npos)
-        {
-            object_content = object_content.substr(null_pos + 1);
-        }
-
+        const auto object_content = object_str.substr(object_str.find('\0') + 1);
         std::cout << object_content << std::flush;
-        return EXIT_SUCCESS;
     }
     else if (cmd == "write-tree")
     {
